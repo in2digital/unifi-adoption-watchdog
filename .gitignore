@@ -1,0 +1,47 @@
+# PowerShell
+*.ps1~
+*.psm1~
+*.psd1~
+
+# Logs
+*.log
+*.txt
+
+# Credentials and sensitive files
+*credentials*
+*secrets*
+*config.local*
+*.env
+
+# IDE and Editor files
+.vscode/
+.vs/
+*.swp
+*.swo
+*~
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Test files
+test/
+tests/
+*.test.ps1
+
+# Output files
+output/
+results/
+reports/
+
+# Temporary files
+temp/
+tmp/
+*.tmp
