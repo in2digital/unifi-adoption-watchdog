@@ -15,6 +15,11 @@ $ControllerUser = "your-username"
 $ControllerPass = "your-password"
 $InformURL = "http://your-controller-url.com/inform"
 
+# Optional: Manually specify AP IP addresses (comma-separated) to process with default credentials
+# These will be processed IN ADDITION to devices from the controller
+# Leave empty ("") to only process controller devices
+$ManualAPAddresses = ""  # Example: "192.168.1.10,192.168.1.11,192.168.1.12"
+
 # Setup SSL/TLS
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 Add-Type @"
@@ -53,7 +58,33 @@ Write-Log "Checking for Posh-SSH module..." "INFO"
 if (-not (Get-Module -ListAvailable -Name Posh-SSH)) {
     Write-Log "Posh-SSH module not found. Installing..." "WARNING"
     try {
-        Install-Module -Name Posh-SSH -Force -Scope CurrentUser
+        # Bootstrap NuGet and install Posh-SSH completely non-interactively
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        
+        # Download and install NuGet provider manually to avoid prompts
+        $nugetUrl = "https://onegetcdn.azureedge.net/providers/Microsoft.PackageManagement.NuGetProvider-2.8.5.208.dll"
+        $nugetPath = "$env:LOCALAPPDATA\PackageManagement\ProviderAssemblies"
+        
+        if (-not (Test-Path $nugetPath)) {
+            New-Item -Path $nugetPath -ItemType Directory -Force | Out-Null
+        }
+        
+        $nugetDll = Join-Path $nugetPath "Microsoft.PackageManagement.NuGetProvider-2.8.5.208.dll"
+        
+        if (-not (Test-Path $nugetDll)) {
+            Write-Log "Downloading NuGet provider..." "INFO"
+            Invoke-WebRequest -Uri $nugetUrl -OutFile $nugetDll -UseBasicParsing
+            Write-Log "NuGet provider downloaded" "SUCCESS"
+        }
+        
+        # Import the NuGet provider
+        Import-PackageProvider -Name NuGet -RequiredVersion 2.8.5.208 -Force | Out-Null
+        
+        # Set PSGallery as trusted
+        Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted -ErrorAction SilentlyContinue
+        
+        # Install Posh-SSH (should now work without prompts)
+        Install-Module -Name Posh-SSH -Force -Scope CurrentUser -AllowClobber -SkipPublisherCheck -Confirm:$false -ErrorAction Stop
         Write-Log "Posh-SSH installed successfully" "SUCCESS"
     }
     catch {
@@ -89,6 +120,7 @@ try {
         Body = $loginBody
         ContentType = 'application/json'
         WebSession = $session
+        UseBasicParsing = $true
         ErrorAction = 'Stop'
     }
     $login = Invoke-WebRequest @loginParams
@@ -106,6 +138,7 @@ try {
         Uri = "$Controller/api/self/sites"
         WebSession = $session
         Method = 'GET'
+        UseBasicParsing = $true
         ErrorAction = 'Stop'
     }
     $sites = Invoke-WebRequest @sitesParams
@@ -126,6 +159,7 @@ try {
         Uri = "$Controller/api/s/$siteName/get/setting"
         WebSession = $session
         Method = 'GET'
+        UseBasicParsing = $true
         ErrorAction = 'Stop'
     }
     $settings = Invoke-WebRequest @settingsParams
@@ -156,6 +190,7 @@ try {
         Uri = "$Controller/api/s/$siteName/stat/device"
         WebSession = $session
         Method = 'GET'
+        UseBasicParsing = $true
         ErrorAction = 'Stop'
     }
     $devices = Invoke-WebRequest @devicesParams
@@ -360,6 +395,7 @@ foreach ($device in $devicesJson.data) {
                         Body = $deleteBody
                         ContentType = 'application/json'
                         WebSession = $session
+                        UseBasicParsing = $true
                         ErrorAction = 'Stop'
                     }
                     $deleteResult = Invoke-WebRequest @deleteParams
@@ -372,36 +408,51 @@ foreach ($device in $devicesJson.data) {
                 
                 # Step 3: Wait for device to finish rebooting
                 Write-Log "    Step 3: Waiting for device to complete factory reset and reboot..." "ACTION"
-                Write-Log "    This may take 180 seconds..." "INFO"
-                Start-Sleep -Seconds 180
+                Write-Log "    Initial wait of 60 seconds..." "INFO"
+                Start-Sleep -Seconds 60
                 
-                # Step 4: Reconnect after reset
+                # Step 4: Reconnect after reset with extended retries and multiple credential sets
                 Write-Log "    Step 4: Reconnecting to device after reset..." "ACTION"
                 try {
-                    # After factory reset, device will have default credentials
-                    $securePass = ConvertTo-SecureString "ubnt" -AsPlainText -Force
-                    $credential = New-Object System.Management.Automation.PSCredential("ubnt", $securePass)
+                    # Try multiple credential sets - some devices keep controller creds, some reset to defaults
+                    $reconnectCredSets = @(
+                        @{User = "ubnt"; Pass = "ubnt"; Label = "default (ubnt/ubnt)"},
+                        @{User = $credUsed.User; Pass = $credUsed.Pass; Label = "previous credentials ($($credUsed.User))"},
+                        @{User = "root"; Pass = "ubnt"; Label = "alternate (root/ubnt)"},
+                        @{User = "admin"; Pass = "admin"; Label = "alternate (admin/admin)"}
+                    )
                     
-                    # Try to reconnect (may take a few attempts)
+                    # Try to reconnect (up to 10 attempts over 5 minutes)
                     $reconnected = $false
-                    for ($i = 1; $i -le 3; $i++) {
-                        try {
-                            Write-Log "    Reconnection attempt $i/3..." "INFO"
-                            $sshSession = New-SSHSession -ComputerName $deviceIP -Credential $credential -AcceptKey -ErrorAction Stop
-                            $reconnected = $true
-                            Write-Log "    Reconnected successfully" "SUCCESS"
-                            break
-                        }
-                        catch {
-                            Write-Log "    Attempt $i failed: $($_.Exception.Message)" "WARNING"
-                            if ($i -lt 3) {
-                                Start-Sleep -Seconds 10
+                    for ($i = 1; $i -le 10; $i++) {
+                        Write-Log "    Reconnection attempt $i/10..." "INFO"
+                        
+                        foreach ($credSet in $reconnectCredSets) {
+                            try {
+                                Write-Log "    Trying $($credSet.Label)..." "INFO"
+                                $securePass = ConvertTo-SecureString $credSet.Pass -AsPlainText -Force
+                                $credential = New-Object System.Management.Automation.PSCredential($credSet.User, $securePass)
+                                $sshSession = New-SSHSession -ComputerName $deviceIP -Credential $credential -AcceptKey -ConnectionTimeout 10 -ErrorAction Stop
+                                $reconnected = $true
+                                Write-Log "    Reconnected successfully with $($credSet.Label) on attempt $i" "SUCCESS"
+                                break
                             }
+                            catch {
+                                Write-Log "    Failed with $($credSet.Label): $($_.Exception.Message)" "WARNING"
+                            }
+                        }
+                        
+                        if ($reconnected) { break }
+                        
+                        if ($i -lt 10) {
+                            Write-Log "    All credentials failed. Waiting 30 seconds before next attempt..." "INFO"
+                            Start-Sleep -Seconds 30
                         }
                     }
                     
                     if (-not $reconnected) {
-                        Write-Log "    Failed to reconnect after factory reset" "ERROR"
+                        Write-Log "    Failed to reconnect after factory reset (10 attempts with all credential sets)" "ERROR"
+                        Write-Log "    Device may need manual intervention or more time to reboot" "ERROR"
                         $summary.Failed++
                         continue
                     }
@@ -456,6 +507,7 @@ foreach ($device in $devicesJson.data) {
                         Uri = "$Controller/api/s/$siteName/stat/device"
                         WebSession = $session
                         Method = 'GET'
+                        UseBasicParsing = $true
                         ErrorAction = 'Stop'
                     }
                     $checkDevices = Invoke-WebRequest @checkDevicesParams
@@ -499,6 +551,7 @@ foreach ($device in $devicesJson.data) {
                         Body = $adoptBody
                         ContentType = 'application/json'
                         WebSession = $session
+                        UseBasicParsing = $true
                         ErrorAction = 'Stop'
                     }
                     $adoptResult = Invoke-WebRequest @adoptParams
@@ -522,6 +575,7 @@ foreach ($device in $devicesJson.data) {
                                 Uri = "$Controller/api/s/$siteName/stat/device"
                                 WebSession = $session
                                 Method = 'GET'
+                                UseBasicParsing = $true
                                 ErrorAction = 'Stop'
                             }
                             $verifyDevices = Invoke-WebRequest @verifyParams
