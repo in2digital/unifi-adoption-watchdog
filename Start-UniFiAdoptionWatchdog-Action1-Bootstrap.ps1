@@ -35,14 +35,35 @@ $scriptContent = $scriptContent -replace [regex]::Escape('$ControllerPass = "you
 $scriptContent = $scriptContent -replace [regex]::Escape('$InformURL = "http://your-controller-url.com/inform"'), "`$InformURL = `"$InformURL`""
 Write-Output "[Bootstrap] Credentials injected successfully"
 
-# Execute the script
-Write-Output "[Bootstrap] Executing UniFi Adoption Watchdog..."
+# Save to temp file and execute
+$tempDir = "C:\Unifi"
+$tempScript = Join-Path $tempDir "UniFi-Adoption-Watchdog-Temp.ps1"
+
+Write-Output "[Bootstrap] Saving script to $tempScript..."
 try {
-    $scriptBlock = [ScriptBlock]::Create($scriptContent)
-    & $scriptBlock
-    exit $LASTEXITCODE
+    if (-not (Test-Path $tempDir)) {
+        New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+    }
+    Set-Content -Path $tempScript -Value $scriptContent -Force
+    Write-Output "[Bootstrap] Script saved successfully"
+}
+catch {
+    Write-Output "[Bootstrap] Failed to save script: $($_.Exception.Message)"
+    exit 1
+}
+
+# Execute the script from file
+Write-Output "[Bootstrap] Executing UniFi Adoption Watchdog from file..."
+try {
+    & powershell.exe -ExecutionPolicy Bypass -File $tempScript
+    $exitCode = $LASTEXITCODE
+    
+    # Clean up
+    Remove-Item -Path $tempScript -Force -ErrorAction SilentlyContinue
+    exit $exitCode
 }
 catch {
     Write-Output "[Bootstrap] Script execution failed: $($_.Exception.Message)"
+    Remove-Item -Path $tempScript -Force -ErrorAction SilentlyContinue
     exit 1
 }
