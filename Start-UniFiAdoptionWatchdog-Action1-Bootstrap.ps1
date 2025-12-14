@@ -27,10 +27,11 @@ catch {
 
 # Inject credentials into the script
 Write-Output "[Bootstrap] Injecting credentials..."
-$scriptContent = $scriptContent -replace '\$Controller = "https://your-controller-url.com"', "`$Controller = `"$Controller`""
-$scriptContent = $scriptContent -replace '\$ControllerUser = "your-username"', "`$ControllerUser = `"$ControllerUser`""
-$scriptContent = $scriptContent -replace '\$ControllerPass = "your-password"', "`$ControllerPass = `"$ControllerPass`""
-$scriptContent = $scriptContent -replace '\$InformURL = "http://your-controller-url.com/inform"', "`$InformURL = `"$InformURL`""
+$scriptContent = $scriptContent -replace [regex]::Escape('$Controller = "https://your-controller-url.com"'), "`$Controller = `"$Controller`""
+$scriptContent = $scriptContent -replace [regex]::Escape('$ControllerUser = "your-username"'), "`$ControllerUser = `"$ControllerUser`""
+$scriptContent = $scriptContent -replace [regex]::Escape('$ControllerPass = "your-password"'), "`$ControllerPass = `"$ControllerPass`""
+$scriptContent = $scriptContent -replace [regex]::Escape('$InformURL = "http://your-controller-url.com/inform"'), "`$InformURL = `"$InformURL`""
+Write-Output "[Bootstrap] Credentials injected: Controller=$Controller, User=$ControllerUser"
 
 # Execute the script
 Write-Output "[Bootstrap] Executing UniFi Adoption Watchdog..."
