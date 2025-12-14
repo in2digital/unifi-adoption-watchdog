@@ -88,8 +88,9 @@ try {
         Uri = "$Controller/api/self/sites"
         WebSession = $session
         Method = 'GET'
+        UseBasicParsing = $true
         ErrorAction = 'Stop'
-    `n        UseBasicParsing = `$true}
+    }
     $sites = Invoke-WebRequest @sitesParams
     $sitesJson = $sites.Content | ConvertFrom-Json
     $siteName = $sitesJson.data[0].name
