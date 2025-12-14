@@ -89,7 +89,7 @@ try {
         WebSession = $session
         Method = 'GET'
         ErrorAction = 'Stop'
-    }
+    `n        UseBasicParsing = `$true}
     $sites = Invoke-WebRequest @sitesParams
     $sitesJson = $sites.Content | ConvertFrom-Json
     $siteName = $sitesJson.data[0].name
@@ -109,7 +109,7 @@ try {
         WebSession = $session
         Method = 'GET'
         ErrorAction = 'Stop'
-    }
+    `n        UseBasicParsing = `$true}
     $settings = Invoke-WebRequest @settingsParams
     $settingsJson = $settings.Content | ConvertFrom-Json
     $mgmtSettings = $settingsJson.data | Where-Object { $_.key -eq 'mgmt' }
@@ -139,7 +139,7 @@ try {
         WebSession = $session
         Method = 'GET'
         ErrorAction = 'Stop'
-    }
+    `n        UseBasicParsing = `$true}
     $devices = Invoke-WebRequest @devicesParams
     $devicesJson = $devices.Content | ConvertFrom-Json
     Write-Log "Found $($devicesJson.data.Count) devices" "SUCCESS"
@@ -281,7 +281,7 @@ foreach ($device in $devicesJson.data) {
                 ContentType = 'application/json'
                 WebSession = $session
                 ErrorAction = 'Stop'
-            }
+            `n        UseBasicParsing = `$true}
             Invoke-WebRequest @deleteParams | Out-Null
             Write-Log "    Device deleted successfully" "SUCCESS"
         }
@@ -350,7 +350,7 @@ foreach ($device in $devicesJson.data) {
                 WebSession = $session
                 Method = 'GET'
                 ErrorAction = 'Stop'
-            }
+            `n        UseBasicParsing = `$true}
             $checkDevices = Invoke-WebRequest @checkParams
             $checkJson = $checkDevices.Content | ConvertFrom-Json
             $pendingDevice = $checkJson.data | Where-Object { $_.mac -eq $deviceMAC }
@@ -383,7 +383,7 @@ foreach ($device in $devicesJson.data) {
                 ContentType = 'application/json'
                 WebSession = $session
                 ErrorAction = 'Stop'
-            }
+            `n        UseBasicParsing = `$true}
             Invoke-WebRequest @adoptParams | Out-Null
             Write-Log "    Adoption command sent" "SUCCESS"
         }
@@ -406,7 +406,7 @@ foreach ($device in $devicesJson.data) {
                     WebSession = $session
                     Method = 'GET'
                     ErrorAction = 'Stop'
-                }
+                `n        UseBasicParsing = `$true}
                 $verifyDevices = Invoke-WebRequest @verifyParams
                 $verifyJson = $verifyDevices.Content | ConvertFrom-Json
                 $verifiedDevice = $verifyJson.data | Where-Object { $_.mac -eq $deviceMAC }
