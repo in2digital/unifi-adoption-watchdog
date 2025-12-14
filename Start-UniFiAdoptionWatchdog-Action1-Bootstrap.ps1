@@ -3,13 +3,12 @@
 # Downloads and runs the full script from GitHub
 # ==========================================
 
-# Action1 Parameters
-param(
-    [string]$Controller = "https://your-controller-url.com",
-    [string]$ControllerUser = "your-username",
-    [string]$ControllerPass = "your-password",
-    [string]$InformURL = "http://your-controller-url.com/inform"
-)
+# Action1 Variables (set these in Action1 automation)
+# These will be substituted by Action1 before execution
+$Controller = $Controller
+$ControllerUser = $ControllerUser
+$ControllerPass = $ControllerPass
+$InformURL = $InformURL
 
 # GitHub raw URL for the Action1 version
 $scriptUrl = "https://raw.githubusercontent.com/in2digital/unifi-adoption-watchdog/main/Start-UniFiAdoptionWatchdog-Action1.ps1"
@@ -27,11 +26,13 @@ catch {
 
 # Inject credentials into the script
 Write-Output "[Bootstrap] Injecting credentials..."
+Write-Output "[Bootstrap] Controller: $Controller"
+Write-Output "[Bootstrap] User: $ControllerUser"
 $scriptContent = $scriptContent -replace [regex]::Escape('$Controller = "https://your-controller-url.com"'), "`$Controller = `"$Controller`""
 $scriptContent = $scriptContent -replace [regex]::Escape('$ControllerUser = "your-username"'), "`$ControllerUser = `"$ControllerUser`""
 $scriptContent = $scriptContent -replace [regex]::Escape('$ControllerPass = "your-password"'), "`$ControllerPass = `"$ControllerPass`""
 $scriptContent = $scriptContent -replace [regex]::Escape('$InformURL = "http://your-controller-url.com/inform"'), "`$InformURL = `"$InformURL`""
-Write-Output "[Bootstrap] Credentials injected: Controller=$Controller, User=$ControllerUser"
+Write-Output "[Bootstrap] Credentials injected successfully"
 
 # Execute the script
 Write-Output "[Bootstrap] Executing UniFi Adoption Watchdog..."
