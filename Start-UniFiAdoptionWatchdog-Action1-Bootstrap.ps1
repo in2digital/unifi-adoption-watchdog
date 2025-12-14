@@ -10,13 +10,14 @@ $ControllerUser = $ControllerUser
 $ControllerPass = $ControllerPass
 $InformURL = $InformURL
 
-# GitHub raw URL for the Action1 version
-$scriptUrl = "https://raw.githubusercontent.com/in2digital/unifi-adoption-watchdog/main/Start-UniFiAdoptionWatchdog-Action1.ps1"
+# GitHub raw URL for the Action1 version (with cache-busting timestamp)
+$timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+$scriptUrl = "https://raw.githubusercontent.com/in2digital/unifi-adoption-watchdog/main/Start-UniFiAdoptionWatchdog-Action1.ps1?t=$timestamp"
 
 # Download the script
 Write-Output "[Bootstrap] Downloading UniFi Adoption Watchdog from GitHub..."
 try {
-    $scriptContent = Invoke-WebRequest -Uri $scriptUrl -UseBasicParsing -ErrorAction Stop | Select-Object -ExpandProperty Content
+    $scriptContent = Invoke-WebRequest -Uri $scriptUrl -UseBasicParsing -Headers @{"Cache-Control"="no-cache"} -ErrorAction Stop | Select-Object -ExpandProperty Content
     Write-Output "[Bootstrap] Script downloaded successfully ($($scriptContent.Length) bytes)"
 }
 catch {
